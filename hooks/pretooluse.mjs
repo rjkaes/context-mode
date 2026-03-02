@@ -148,7 +148,7 @@ if (tool === "Read") {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       additionalContext:
-        "CONTEXT TIP: If this file is large (>50 lines), prefer mcp__context-mode__execute_file(path, language, code) — processes in sandbox, only stdout enters context.",
+        '<context_guidance>\n  <tip>\n    This operation may flood your context window. To stay efficient:\n    - Use mcp__context-mode__execute_file(path, language, code) to process large files in the sandbox.\n    - Only your final printed summary will enter the context.\n  </tip>\n</context_guidance>',
     },
   }));
   process.exit(0);
@@ -160,7 +160,7 @@ if (tool === "Grep") {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       additionalContext:
-        'CONTEXT TIP: If results may be large, prefer mcp__context-mode__execute(language: "shell", code: "grep ...") — runs in sandbox, only stdout enters context.',
+        '<context_guidance>\n  <tip>\n    This operation may flood your context window. To stay efficient:\n    - Use mcp__context-mode__execute(language: "shell", code: "...") to run searches in the sandbox.\n    - Only your final printed summary will enter the context.\n  </tip>\n</context_guidance>',
     },
   }));
   process.exit(0);
