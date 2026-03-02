@@ -5,6 +5,9 @@
  */
 
 import { strict as assert } from "node:assert";
+import { writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 let passed = 0;
 let failed = 0;
@@ -28,6 +31,9 @@ import {
   parseBashPattern,
   globToRegex,
   matchesAnyPattern,
+  readBashPolicies,
+  evaluateCommand,
+  evaluateCommandDenyOnly,
 } from "../build/security.js";
 
 async function main() {
@@ -140,6 +146,113 @@ async function main() {
     );
     assert.equal(result, null);
   });
+
+  // ── readBashPolicies ──
+
+  const tmpBase = join(tmpdir(), `security-test-${Date.now()}`);
+  const globalDir = join(tmpBase, "global-home", ".claude");
+  const globalSettingsPath = join(globalDir, "settings.json");
+  const projectDir = join(tmpBase, "project");
+  const projectClaudeDir = join(projectDir, ".claude");
+
+  // Set up temp directories
+  mkdirSync(globalDir, { recursive: true });
+  mkdirSync(projectClaudeDir, { recursive: true });
+
+  // Global settings: allow npm, deny sudo
+  writeFileSync(
+    globalSettingsPath,
+    JSON.stringify({
+      permissions: {
+        allow: ["Bash(npm:*)", "Read(.env)"],
+        deny: ["Bash(sudo *)"],
+      },
+    }),
+  );
+
+  // Project-shared settings: deny npm publish
+  writeFileSync(
+    join(projectClaudeDir, "settings.json"),
+    JSON.stringify({
+      permissions: {
+        deny: ["Bash(npm publish)"],
+        allow: [],
+      },
+    }),
+  );
+
+  await test("readBashPolicies: reads global only when no projectDir", () => {
+    const policies = readBashPolicies(undefined, globalSettingsPath);
+    assert.equal(policies.length, 1, "should have 1 policy (global)");
+    assert.deepEqual(policies[0].allow, ["Bash(npm:*)"]);
+    assert.deepEqual(policies[0].deny, ["Bash(sudo *)"]);
+  });
+
+  await test("readBashPolicies: reads project + global with precedence", () => {
+    const policies = readBashPolicies(projectDir, globalSettingsPath);
+    // Project-shared first, then global (settings.local.json doesn't exist, skipped)
+    assert.equal(policies.length, 2, "should have 2 policies");
+    // First policy = project-shared (more local)
+    assert.deepEqual(policies[0].deny, ["Bash(npm publish)"]);
+    // Second policy = global
+    assert.deepEqual(policies[1].allow, ["Bash(npm:*)"]);
+    assert.deepEqual(policies[1].deny, ["Bash(sudo *)"]);
+  });
+
+  await test("readBashPolicies: missing files produce empty policies", () => {
+    const policies = readBashPolicies("/nonexistent/path", globalSettingsPath);
+    // Project-local and project-shared both missing → only global
+    assert.equal(policies.length, 1);
+  });
+
+  // ── evaluateCommand ──
+
+  await test("evaluateCommand: global allow matches", () => {
+    const policies = readBashPolicies(undefined, globalSettingsPath);
+    const result = evaluateCommand("npm install", policies, false);
+    assert.equal(result.decision, "allow");
+    assert.equal(result.matchedPattern, "Bash(npm:*)");
+  });
+
+  await test("evaluateCommand: global deny beats allow", () => {
+    const policies = readBashPolicies(undefined, globalSettingsPath);
+    const result = evaluateCommand("sudo npm install", policies, false);
+    assert.equal(result.decision, "deny");
+    assert.equal(result.matchedPattern, "Bash(sudo *)");
+  });
+
+  await test("evaluateCommand: local deny overrides global allow", () => {
+    const policies = readBashPolicies(projectDir, globalSettingsPath);
+    const result = evaluateCommand("npm publish", policies, false);
+    assert.equal(result.decision, "deny");
+    assert.equal(result.matchedPattern, "Bash(npm publish)");
+  });
+
+  await test("evaluateCommand: no match returns ask", () => {
+    const policies = readBashPolicies(projectDir, globalSettingsPath);
+    const result = evaluateCommand("python script.py", policies, false);
+    assert.equal(result.decision, "ask");
+    assert.equal(result.matchedPattern, undefined);
+  });
+
+  // ── evaluateCommandDenyOnly ──
+
+  await test("evaluateCommandDenyOnly: denied command", () => {
+    const policies = readBashPolicies(undefined, globalSettingsPath);
+    const result = evaluateCommandDenyOnly("sudo rm -rf /", policies, false);
+    assert.equal(result.decision, "deny");
+    assert.equal(result.matchedPattern, "Bash(sudo *)");
+  });
+
+  await test("evaluateCommandDenyOnly: non-denied returns allow", () => {
+    const policies = readBashPolicies(undefined, globalSettingsPath);
+    const result = evaluateCommandDenyOnly("npm install", policies, false);
+    assert.equal(result.decision, "allow");
+    assert.equal(result.matchedPattern, undefined);
+  });
+
+  // Clean up temp files
+  rmSync(tmpBase, { recursive: true, force: true });
 
   // ── Summary ──
   console.log(`\n${"=".repeat(50)}`);

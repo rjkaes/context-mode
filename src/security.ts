@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { homedir } from "node:os";
+
 // ==============================================================================
 // Types
 // ==============================================================================
@@ -86,4 +90,136 @@ export function matchesAnyPattern(
     if (globToRegex(glob, caseInsensitive).test(command)) return pattern;
   }
   return null;
+}
+
+// ==============================================================================
+// Settings Reader
+// ==============================================================================
+
+/** Read one settings file and return a SecurityPolicy with only Bash patterns. */
+function readSingleSettings(path: string): SecurityPolicy | null {
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf-8");
+  } catch {
+    return null;
+  }
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  const perms = parsed?.permissions;
+  if (!perms || typeof perms !== "object") return null;
+
+  const filterBash = (arr: unknown): string[] => {
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(
+      (p): p is string => typeof p === "string" && parseBashPattern(p) !== null,
+    );
+  };
+
+  return {
+    allow: filterBash(perms.allow),
+    deny: filterBash(perms.deny),
+    ask: filterBash(perms.ask),
+  };
+}
+
+/**
+ * Read Bash permission policies from up to 3 settings files.
+ *
+ * Returns policies in precedence order (most local first):
+ *   1. .claude/settings.local.json  (project-local)
+ *   2. .claude/settings.json        (project-shared)
+ *   3. ~/.claude/settings.json      (global)
+ *
+ * Missing or invalid files are silently skipped.
+ */
+export function readBashPolicies(
+  projectDir?: string,
+  globalSettingsPath?: string,
+): SecurityPolicy[] {
+  const policies: SecurityPolicy[] = [];
+
+  if (projectDir) {
+    const localPath = resolve(projectDir, ".claude", "settings.local.json");
+    const localPolicy = readSingleSettings(localPath);
+    if (localPolicy) policies.push(localPolicy);
+
+    const sharedPath = resolve(projectDir, ".claude", "settings.json");
+    const sharedPolicy = readSingleSettings(sharedPath);
+    if (sharedPolicy) policies.push(sharedPolicy);
+  }
+
+  const globalPath =
+    globalSettingsPath ?? resolve(homedir(), ".claude", "settings.json");
+  const globalPolicy = readSingleSettings(globalPath);
+  if (globalPolicy) policies.push(globalPolicy);
+
+  return policies;
+}
+
+// ==============================================================================
+// Decision Engine
+// ==============================================================================
+
+interface CommandDecision {
+  decision: PermissionDecision;
+  matchedPattern?: string;
+}
+
+/**
+ * Evaluate a command against policies in precedence order.
+ *
+ * Within each policy: deny > ask > allow (most restrictive wins).
+ * First definitive match across policies wins.
+ * Default (no match in any policy): "ask".
+ */
+export function evaluateCommand(
+  command: string,
+  policies: SecurityPolicy[],
+  caseInsensitive: boolean = process.platform === "win32",
+): CommandDecision {
+  for (const policy of policies) {
+    // Deny takes highest priority within a policy
+    const denyMatch = matchesAnyPattern(command, policy.deny, caseInsensitive);
+    if (denyMatch) return { decision: "deny", matchedPattern: denyMatch };
+
+    // Ask next
+    const askMatch = matchesAnyPattern(command, policy.ask, caseInsensitive);
+    if (askMatch) return { decision: "ask", matchedPattern: askMatch };
+
+    // Allow last
+    const allowMatch = matchesAnyPattern(
+      command,
+      policy.allow,
+      caseInsensitive,
+    );
+    if (allowMatch) return { decision: "allow", matchedPattern: allowMatch };
+  }
+
+  return { decision: "ask" };
+}
+
+/**
+ * Server-side variant: only enforce deny patterns.
+ *
+ * The server has no UI for "ask" prompts, so allow/ask patterns are
+ * irrelevant. Returns "deny" if any deny pattern matches, otherwise "allow".
+ */
+export function evaluateCommandDenyOnly(
+  command: string,
+  policies: SecurityPolicy[],
+  caseInsensitive: boolean = process.platform === "win32",
+): { decision: "deny" | "allow"; matchedPattern?: string } {
+  for (const policy of policies) {
+    const denyMatch = matchesAnyPattern(command, policy.deny, caseInsensitive);
+    if (denyMatch) return { decision: "deny", matchedPattern: denyMatch };
+  }
+
+  return { decision: "allow" };
 }
