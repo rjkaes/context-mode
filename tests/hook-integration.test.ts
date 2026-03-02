@@ -278,6 +278,10 @@ async function main() {
       parsed.hookSpecificOutput.additionalContext.includes("context-mode"),
       "Expected nudge to mention context-mode",
     );
+    assert.ok(
+      parsed.hookSpecificOutput.additionalContext.includes("<context_guidance>"),
+      "Expected <context_guidance> XML wrapper in Read nudge",
+    );
   });
 
   // ===== GREP =====
@@ -293,6 +297,10 @@ async function main() {
     assert.ok(
       parsed.hookSpecificOutput.additionalContext.includes("context-mode"),
       "Expected nudge to mention context-mode",
+    );
+    assert.ok(
+      parsed.hookSpecificOutput.additionalContext.includes("<context_guidance>"),
+      "Expected <context_guidance> XML wrapper in Grep nudge",
     );
   });
 
