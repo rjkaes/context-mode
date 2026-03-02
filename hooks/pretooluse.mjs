@@ -11,6 +11,15 @@ import { resolve, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir, tmpdir } from "node:os";
 
+// ─── Security module: graceful import from compiled build ───
+let security = null;
+try {
+  const __hookDir = dirname(fileURLToPath(import.meta.url));
+  security = await import(resolve(__hookDir, "..", "build", "security.js"));
+} catch {
+  // Build not available — skip security checks, rely on existing routing
+}
+
 // ─── Self-heal: rename dir to correct version, fix registry + hooks ───
 try {
   const hookDir = dirname(fileURLToPath(import.meta.url));
@@ -104,9 +113,42 @@ const input = JSON.parse(raw);
 const tool = input.tool_name ?? "";
 const toolInput = input.tool_input ?? {};
 
-// ─── Bash: redirect data-fetching commands via updatedInput ───
+// ─── Bash: Stage 1 security check, then Stage 2 routing ───
 if (tool === "Bash") {
   const command = toolInput.command ?? "";
+
+  // Stage 1: Security check against user's deny/allow patterns.
+  // Skip when no policies exist — evaluateCommand defaults to "ask" with
+  // an empty array, but no policies means no settings files were found,
+  // so there is nothing to enforce.
+  if (security) {
+    const policies = security.readBashPolicies(process.env.CLAUDE_PROJECT_DIR);
+    if (policies.length > 0) {
+      const result = security.evaluateCommand(command, policies);
+      if (result.decision === "deny") {
+        console.log(JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: "deny",
+            reason: `Blocked by security policy: ${result.matchedPattern}`,
+          },
+        }));
+        process.exit(0);
+      }
+      if (result.decision === "ask") {
+        console.log(JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: "ask",
+          },
+        }));
+        process.exit(0);
+      }
+      // "allow" or no match → fall through to Stage 2
+    }
+  }
+
+  // Stage 2: Context-mode routing (existing behavior, unchanged)
 
   // curl/wget → replace with echo redirect
   if (/(^|\s|&&|\||\;)(curl|wget)\s/i.test(command)) {
@@ -245,6 +287,91 @@ if (tool === "Task") {
       updatedInput,
     },
   }));
+  process.exit(0);
+}
+
+// ─── MCP execute: security check for shell commands ───
+if (tool.includes("context-mode") && tool.endsWith("__execute")) {
+  if (security && toolInput.language === "shell") {
+    const code = toolInput.code ?? "";
+    const policies = security.readBashPolicies(process.env.CLAUDE_PROJECT_DIR);
+    if (policies.length > 0) {
+      const result = security.evaluateCommand(code, policies);
+      if (result.decision === "deny") {
+        console.log(JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: "deny",
+            reason: `Blocked by security policy: shell code matches deny pattern ${result.matchedPattern}`,
+          },
+        }));
+        process.exit(0);
+      }
+      if (result.decision === "ask") {
+        console.log(JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: "ask",
+          },
+        }));
+        process.exit(0);
+      }
+    }
+  }
+  process.exit(0);
+}
+
+// ─── MCP execute_file: check file path against Read deny patterns ───
+if (tool.includes("context-mode") && tool.endsWith("__execute_file")) {
+  if (security) {
+    const filePath = toolInput.path ?? "";
+    const denyGlobs = security.readToolDenyPatterns("Read", process.env.CLAUDE_PROJECT_DIR);
+    const evalResult = security.evaluateFilePath(filePath, denyGlobs);
+    if (evalResult.denied) {
+      console.log(JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          reason: `Blocked by security policy: file path matches Read deny pattern ${evalResult.matchedPattern}`,
+        },
+      }));
+      process.exit(0);
+    }
+  }
+  process.exit(0);
+}
+
+// ─── MCP batch_execute: check each command individually ───
+if (tool.includes("context-mode") && tool.endsWith("__batch_execute")) {
+  if (security) {
+    const commands = toolInput.commands ?? [];
+    const policies = security.readBashPolicies(process.env.CLAUDE_PROJECT_DIR);
+    if (policies.length > 0) {
+      for (const entry of commands) {
+        const cmd = entry.command ?? "";
+        const result = security.evaluateCommand(cmd, policies);
+        if (result.decision === "deny") {
+          console.log(JSON.stringify({
+            hookSpecificOutput: {
+              hookEventName: "PreToolUse",
+              permissionDecision: "deny",
+              reason: `Blocked by security policy: batch command "${entry.label ?? cmd}" matches deny pattern ${result.matchedPattern}`,
+            },
+          }));
+          process.exit(0);
+        }
+        if (result.decision === "ask") {
+          console.log(JSON.stringify({
+            hookSpecificOutput: {
+              hookEventName: "PreToolUse",
+              permissionDecision: "ask",
+            },
+          }));
+          process.exit(0);
+        }
+      }
+    }
+  }
   process.exit(0);
 }
 

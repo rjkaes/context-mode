@@ -7,11 +7,17 @@
 
 import { strict as assert } from "node:assert";
 import { spawnSync } from "node:child_process";
+import { mkdtempSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HOOK_PATH = join(__dirname, "..", "hooks", "pretooluse.mjs");
+
+// Isolate tests from the user's real ~/.claude/settings.json so the
+// security module (if built) finds no policies and falls through.
+const ISOLATED_HOME = mkdtempSync(join(tmpdir(), "hook-test-home-"));
 
 let passed = 0;
 let failed = 0;
@@ -45,11 +51,12 @@ interface HookResult {
   stderr: string;
 }
 
-function runHook(input: Record<string, unknown>): HookResult {
+function runHook(input: Record<string, unknown>, env?: Record<string, string>): HookResult {
   const result = spawnSync("node", [HOOK_PATH], {
     input: JSON.stringify(input),
     encoding: "utf-8",
     timeout: 5000,
+    env: { ...process.env, HOME: ISOLATED_HOME, ...env },
   });
   return {
     exitCode: result.status ?? 1,
