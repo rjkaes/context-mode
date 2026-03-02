@@ -196,38 +196,43 @@ if (tool === "Task") {
 
   const ROUTING_BLOCK = `
 
----
-CONTEXT WINDOW PROTECTION — USE CONTEXT-MODE MCP TOOLS
+<context_window_protection>
+  <priority_instructions>
+    Raw tool output floods your context window. You MUST use context-mode MCP tools to keep raw data in the sandbox.
+  </priority_instructions>
 
-Raw Bash/Read/WebFetch output floods your context. You have context-mode tools that keep data in sandbox.
+  <tool_selection_hierarchy>
+    1. GATHER: mcp__context-mode__batch_execute(commands, queries)
+       - Primary tool for research. Runs all commands, auto-indexes, and searches.
+       - ONE call replaces many individual steps.
+    2. FOLLOW-UP: mcp__context-mode__search(queries: ["q1", "q2", ...])
+       - Use for all follow-up questions. ONE call, many queries.
+    3. PROCESSING: mcp__context-mode__execute(language, code) | mcp__context-mode__execute_file(path, language, code)
+       - Use for API calls, log analysis, and data processing.
+  </tool_selection_hierarchy>
 
-STEP 1 — GATHER: mcp__context-mode__batch_execute(commands, queries)
-  commands: [{label: "Name", command: "shell cmd"}, ...]
-  queries: ["query1", "query2", ...] — put 5-8 queries covering everything you need.
-  Runs all commands, indexes output, returns search results. ONE call, no follow-ups.
+  <forbidden_actions>
+    - DO NOT use Bash for commands producing >20 lines of output.
+    - DO NOT use Read for large files.
+    - DO NOT use WebFetch (use mcp__context-mode__fetch_and_index instead).
+    - Bash is ONLY for git/mkdir/rm/mv/navigation.
+  </forbidden_actions>
 
-STEP 2 — FOLLOW-UP: mcp__context-mode__search(queries: ["q1", "q2", "q3", ...])
-  Pass ALL follow-up questions as queries array. ONE call, not separate calls.
-
-OTHER: execute(language, code) | execute_file(path, language, code) | fetch_and_index(url) + search
-
-FORBIDDEN: Bash for output, Read for files, WebFetch. Bash is ONLY for git/mkdir/rm/mv.
-
-OUTPUT FORMAT — KEEP YOUR FINAL RESPONSE UNDER 500 WORDS:
-The parent agent context window is precious. Your full response gets injected into it.
-
-1. ARTIFACTS (PRDs, configs, code files) → Write to FILES, never return as inline text.
-   Return only: file path + 1-line description.
-2. DETAILED FINDINGS → Index into knowledge base:
-   mcp__context-mode__index(content: "...", source: "descriptive-label")
-   The parent agent shares the SAME knowledge base and can search() your indexed content.
-3. YOUR RESPONSE must be a concise summary:
-   - What you did (2-3 bullets)
-   - File paths created/modified (if any)
-   - Source labels you indexed (so parent can search)
-   - Key findings in bullet points
-   Do NOT return raw data, full file contents, or lengthy explanations.
----`;
+  <output_constraints>
+    <word_limit>Keep your final response under 500 words.</word_limit>
+    <artifact_policy>
+      Write artifacts (code, configs, PRDs) to FILES. NEVER return them as inline text.
+      Return only: file path + 1-line description.
+    </artifact_policy>
+    <response_format>
+      Your response must be a concise summary:
+      - Actions taken (2-3 bullets)
+      - File paths created/modified
+      - Knowledge base source labels (so parent can search)
+      - Key findings
+    </response_format>
+  </output_constraints>
+</context_window_protection>`;
 
   const updatedInput =
     subagentType === "Bash"

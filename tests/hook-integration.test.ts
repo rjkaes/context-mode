@@ -192,8 +192,20 @@ async function main() {
     assert.equal(parsed.hookSpecificOutput.hookEventName, "PreToolUse");
     assert.ok(parsed.hookSpecificOutput.updatedInput, "Expected updatedInput");
     assert.ok(
-      parsed.hookSpecificOutput.updatedInput.prompt.includes("CONTEXT WINDOW PROTECTION"),
-      "Expected routing block in updatedInput.prompt",
+      parsed.hookSpecificOutput.updatedInput.prompt.includes("<context_window_protection>"),
+      "Expected <context_window_protection> XML tag in updatedInput.prompt",
+    );
+    assert.ok(
+      parsed.hookSpecificOutput.updatedInput.prompt.includes("</context_window_protection>"),
+      "Expected </context_window_protection> closing tag in updatedInput.prompt",
+    );
+    assert.ok(
+      parsed.hookSpecificOutput.updatedInput.prompt.includes("<tool_selection_hierarchy>"),
+      "Expected <tool_selection_hierarchy> tag in updatedInput.prompt",
+    );
+    assert.ok(
+      parsed.hookSpecificOutput.updatedInput.prompt.includes("<forbidden_actions>"),
+      "Expected <forbidden_actions> tag in updatedInput.prompt",
     );
     assert.ok(
       parsed.hookSpecificOutput.updatedInput.prompt.includes(
@@ -221,8 +233,8 @@ async function main() {
       `Expected subagent_type upgraded to general-purpose, got: ${updated.subagent_type}`,
     );
     assert.ok(
-      updated.prompt.includes("CONTEXT WINDOW PROTECTION"),
-      "Expected routing block in prompt",
+      updated.prompt.includes("<context_window_protection>"),
+      "Expected XML routing block in prompt",
     );
     assert.ok(
       updated.prompt.includes("Research this GitHub repository."),
