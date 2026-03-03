@@ -23,6 +23,7 @@ export const ROUTING_BLOCK = `
     - DO NOT use Bash for commands producing >20 lines of output.
     - DO NOT use Read for analysis (use execute_file). Read IS correct for files you intend to Edit.
     - DO NOT use WebFetch (use mcp__context-mode__fetch_and_index instead).
+    - DO NOT run git in sandbox tools (batch_execute, execute) — no .git directory exists there.
     - Bash is ONLY for git/mkdir/rm/mv/navigation.
   </forbidden_actions>
 

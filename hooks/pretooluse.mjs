@@ -251,8 +251,19 @@ if (tool === "Task") {
   });
 }
 
-// ─── MCP execute: security check for shell commands ───
+// ─── MCP execute: git guard + security check for shell commands ───
 if (tool.includes("context-mode") && tool.endsWith("__execute")) {
+  // Git commands don't work in the sandbox (no .git directory)
+  if (toolInput.language === "shell" && /(^|\s|&&|\||\;)git\s/.test(toolInput.code ?? "")) {
+    outputAndExit({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        reason: "git commands do not work in the sandbox (no .git directory). Use Bash for all git operations (git log, git diff, git status, etc.).",
+      },
+    });
+  }
+
   if (security && toolInput.language === "shell") {
     const code = toolInput.code ?? "";
     const policies = security.readBashPolicies(process.env.CLAUDE_PROJECT_DIR);
@@ -327,8 +338,20 @@ if (tool.includes("context-mode") && tool.endsWith("__execute_file")) {
   process.exit(0);
 }
 
-// ─── MCP batch_execute: check each command individually ───
+// ─── MCP batch_execute: git guard + security check for each command ───
 if (tool.includes("context-mode") && tool.endsWith("__batch_execute")) {
+  // Git commands don't work in the sandbox (no .git directory)
+  const batchCmds = toolInput.commands ?? [];
+  if (batchCmds.some(e => /(^|\s|&&|\||\;)git\s/.test(e.command ?? ""))) {
+    outputAndExit({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        reason: "git commands do not work in the sandbox (no .git directory). Use Bash for all git operations (git log, git diff, git status, etc.).",
+      },
+    });
+  }
+
   if (security) {
     const commands = toolInput.commands ?? [];
     const policies = security.readBashPolicies(process.env.CLAUDE_PROJECT_DIR);
