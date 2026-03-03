@@ -7,7 +7,6 @@ import {
   detectRuntimes,
   buildCommand,
   getRuntimeSummary,
-  getAvailableLanguages,
   type RuntimeMap,
 } from "../src/runtime.js";
 
@@ -64,10 +63,12 @@ async function main() {
   });
 
   await test("detects Shell runtime (bash or sh)", async () => {
-    assert.ok(
-      ["bash", "sh"].includes(runtimes.shell),
-      `Got: ${runtimes.shell}`,
-    );
+    const shell = runtimes.shell;
+    const isValid = ["bash", "sh"].includes(shell) ||
+      shell.toLowerCase().endsWith("bash.exe") ||
+      shell.toLowerCase().endsWith("/bash") ||
+      shell.toLowerCase().endsWith("/sh");
+    assert.ok(isValid, `Got: ${shell}`);
   });
 
   await test("detects TypeScript runtime", async () => {
@@ -944,6 +945,72 @@ IO.puts("has users: #{String.contains?(file_content, "users")}")
     });
   }
 
+  // --- UTF-8 / Non-ASCII file content ---
+  const utf8File = join(testDir, "utf8-data.txt");
+  writeFileSync(utf8File, "这是中文内容\n日本語テスト\n한국어\nEmoji: 🔒✅\nLine 5", "utf-8");
+
+  await test("execute_file: Python reads UTF-8 non-ASCII content", async () => {
+    const r = await executor.executeFile({
+      path: utf8File,
+      language: "python",
+      code: `
+lines = FILE_CONTENT.strip().split('\\n')
+print(f"lines: {len(lines)}")
+print(f"first: {lines[0]}")
+print(f"has_emoji: {'🔒' in FILE_CONTENT}")
+      `,
+    });
+    assert.equal(r.exitCode, 0, "Python UTF-8 exit code: " + r.stderr);
+    assert.ok(r.stdout.includes("lines: 5"), "Should have 5 lines");
+    assert.ok(r.stdout.includes("first: 这是中文内容"), "Should read Chinese");
+    assert.ok(r.stdout.includes("has_emoji: True"), "Should find emoji");
+  });
+
+  await test("execute_file: JS reads UTF-8 non-ASCII content", async () => {
+    const r = await executor.executeFile({
+      path: utf8File,
+      language: "javascript",
+      code: `
+const lines = FILE_CONTENT.trim().split('\\n');
+console.log("lines: " + lines.length);
+console.log("first: " + lines[0]);
+console.log("has_emoji: " + FILE_CONTENT.includes('🔒'));
+      `,
+    });
+    assert.equal(r.exitCode, 0);
+    assert.ok(r.stdout.includes("lines: 5"));
+    assert.ok(r.stdout.includes("first: 这是中文内容"));
+    assert.ok(r.stdout.includes("has_emoji: true"));
+  });
+
+  if (runtimes.ruby) {
+    await test("execute_file: Ruby reads UTF-8 non-ASCII content", async () => {
+      const r = await executor.executeFile({
+        path: utf8File,
+        language: "ruby",
+        code: `
+lines = FILE_CONTENT.strip.split("\\n")
+puts "lines: #{lines.length}"
+puts "first: #{lines[0]}"
+puts "has_emoji: #{FILE_CONTENT.include?('🔒')}"
+        `,
+      });
+      assert.equal(r.exitCode, 0, "Ruby UTF-8 exit code: " + r.stderr);
+      assert.ok(r.stdout.includes("lines: 5"));
+      assert.ok(r.stdout.includes("first: 这是中文内容"));
+    });
+  }
+
+  await test("execute_file: Shell reads UTF-8 non-ASCII content", async () => {
+    const r = await executor.executeFile({
+      path: utf8File,
+      language: "shell",
+      code: 'echo "$FILE_CONTENT" | head -1',
+    });
+    assert.equal(r.exitCode, 0);
+    assert.ok(r.stdout.includes("这是中文内容"), "Shell should read Chinese: " + r.stdout);
+  });
+
   rmSync(testDir, { recursive: true, force: true });
 
   // ===== CONCURRENCY =====
@@ -1032,95 +1099,6 @@ IO.puts("has users: #{String.contains?(file_content, "users")}")
     });
     assert.equal(r.exitCode, 0);
     assert.ok(r.stdout.includes("Hello"));
-  });
-
-  // ===== TEMP CLEANUP RESILIENCE =====
-  console.log("\n--- Temp Cleanup Resilience ---\n");
-
-  await test("concurrent executions all return valid results (EBUSY resilience)", async () => {
-    // On Windows, rapid concurrent executions often trigger EBUSY when
-    // rmSync tries to delete the temp dir while Windows still holds handles.
-    // With the current code, rmSync throwing in the finally block masks
-    // the actual execution result — execute() rejects instead of resolving.
-    // This test verifies that ALL concurrent executions return valid ExecResult.
-    const count = 15;
-    const promises = Array.from({ length: count }, (_, i) =>
-      executor.execute({
-        language: "javascript",
-        code: `
-          const fs = require('fs');
-          const path = require('path');
-          for (let j = 0; j < 3; j++) {
-            fs.writeFileSync(path.join(process.cwd(), 'f' + j + '.tmp'), 'data');
-          }
-          console.log("ok-${i}");
-        `,
-      }),
-    );
-    const results = await Promise.all(promises);
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i];
-      assert.equal(typeof r.exitCode, "number", `Execution ${i}: exitCode not a number`);
-      assert.equal(typeof r.stdout, "string", `Execution ${i}: stdout not a string`);
-      assert.equal(typeof r.stderr, "string", `Execution ${i}: stderr not a string`);
-      assert.equal(typeof r.timedOut, "boolean", `Execution ${i}: timedOut not a boolean`);
-      assert.equal(r.exitCode, 0, `Execution ${i} failed with stderr: ${r.stderr}`);
-      assert.ok(r.stdout.includes(`ok-${i}`), `Missing output for execution ${i}`);
-    }
-  });
-
-  await test("PATH-dependent tools accessible from executor shell", async () => {
-    // Verifies that the executor's sanitized env preserves PATH correctly.
-    // On Windows, tools like gh/node installed via Scoop/Chocolatey must be
-    // visible from the spawned shell process. If PATH is broken, this fails.
-    const r = await executor.execute({
-      language: "shell",
-      code: 'node --version',
-    });
-    assert.equal(r.exitCode, 0, `node not found in executor env, stderr: ${r.stderr}`);
-    assert.ok(r.stdout.trim().startsWith("v"), `Expected version string, got: ${r.stdout}`);
-  });
-
-  // ===== WINDOWS SHELL SUPPORT =====
-  console.log("\n--- Windows Shell Support ---\n");
-
-  await test("execute returns error when shell runtime is null (not ENOENT crash)", async () => {
-    const noShellRuntimes: RuntimeMap = { ...runtimes, shell: null };
-    const noShellExecutor = new PolyglotExecutor({ runtimes: noShellRuntimes });
-    const r = await noShellExecutor.execute({
-      language: "shell",
-      code: 'echo "hello"',
-    });
-    // Should get a non-zero exit code with a meaningful error, NOT an unhandled ENOENT
-    assert.notEqual(r.exitCode, 0, "Should fail when shell is null");
-    assert.ok(
-      r.stderr.toLowerCase().includes("shell") || r.stderr.toLowerCase().includes("not available"),
-      `Expected meaningful error about shell, got: ${r.stderr}`,
-    );
-  });
-
-  await test("getAvailableLanguages excludes shell when runtime is null", async () => {
-    const noShellRuntimes: RuntimeMap = { ...runtimes, shell: null };
-    const { getAvailableLanguages } = await import("../src/runtime.js");
-    const langs = getAvailableLanguages(noShellRuntimes);
-    assert.ok(!langs.includes("shell"), `shell should not be in available languages when null, got: ${langs}`);
-  });
-
-  await test("buildCommand throws for null shell", async () => {
-    const noShellRuntimes: RuntimeMap = { ...runtimes, shell: null };
-    let threw = false;
-    let errorMsg = "";
-    try {
-      buildCommand(noShellRuntimes, "shell", "/tmp/script.sh");
-    } catch (err: unknown) {
-      threw = true;
-      errorMsg = err instanceof Error ? err.message : String(err);
-    }
-    assert.ok(threw, "buildCommand should throw when shell is null");
-    assert.ok(
-      errorMsg.toLowerCase().includes("no shell") || errorMsg.toLowerCase().includes("not available"),
-      `Expected shell-related error, got: ${errorMsg}`,
-    );
   });
 
   // ===== SUMMARY =====

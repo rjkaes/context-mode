@@ -345,6 +345,7 @@ export class PolyglotExecutor {
       LANG: "en_US.UTF-8",
       PYTHONDONTWRITEBYTECODE: "1",
       PYTHONUNBUFFERED: "1",
+      PYTHONUTF8: "1",
       NO_COLOR: "1",
     };
 
@@ -380,14 +381,14 @@ export class PolyglotExecutor {
       case "typescript":
         return `const FILE_CONTENT_PATH = ${escaped};\nconst FILE_CONTENT = require("fs").readFileSync(FILE_CONTENT_PATH, "utf-8");\n${code}`;
       case "python":
-        return `FILE_CONTENT_PATH = ${escaped}\nwith open(FILE_CONTENT_PATH, "r") as _f:\n    FILE_CONTENT = _f.read()\n${code}`;
+        return `FILE_CONTENT_PATH = ${escaped}\nwith open(FILE_CONTENT_PATH, "r", encoding="utf-8") as _f:\n    FILE_CONTENT = _f.read()\n${code}`;
       case "shell": {
         // Single-quote the path to prevent $, backtick, and ! expansion
         const sq = "'" + absolutePath.replace(/'/g, "'\\''") + "'";
         return `FILE_CONTENT_PATH=${sq}\nFILE_CONTENT=$(cat ${sq})\n${code}`;
       }
       case "ruby":
-        return `FILE_CONTENT_PATH = ${escaped}\nFILE_CONTENT = File.read(FILE_CONTENT_PATH)\n${code}`;
+        return `FILE_CONTENT_PATH = ${escaped}\nFILE_CONTENT = File.read(FILE_CONTENT_PATH, encoding: "utf-8")\n${code}`;
       case "go":
         return `package main\n\nimport (\n\t"fmt"\n\t"os"\n)\n\nvar FILE_CONTENT_PATH = ${escaped}\n\nfunc main() {\n\tb, _ := os.ReadFile(FILE_CONTENT_PATH)\n\tFILE_CONTENT := string(b)\n\t_ = FILE_CONTENT\n\t_ = fmt.Sprint()\n${code}\n}\n`;
       case "rust":
@@ -395,9 +396,9 @@ export class PolyglotExecutor {
       case "php":
         return `<?php\n$FILE_CONTENT_PATH = ${escaped};\n$FILE_CONTENT = file_get_contents($FILE_CONTENT_PATH);\n${code}`;
       case "perl":
-        return `my $FILE_CONTENT_PATH = ${escaped};\nopen(my $fh, '<', $FILE_CONTENT_PATH) or die "Cannot open: $!";\nmy $FILE_CONTENT = do { local $/; <$fh> };\nclose($fh);\n${code}`;
+        return `my $FILE_CONTENT_PATH = ${escaped};\nopen(my $fh, '<:encoding(UTF-8)', $FILE_CONTENT_PATH) or die "Cannot open: $!";\nmy $FILE_CONTENT = do { local $/; <$fh> };\nclose($fh);\n${code}`;
       case "r":
-        return `FILE_CONTENT_PATH <- ${escaped}\nFILE_CONTENT <- readLines(FILE_CONTENT_PATH, warn=FALSE)\nFILE_CONTENT <- paste(FILE_CONTENT, collapse="\\n")\n${code}`;
+        return `FILE_CONTENT_PATH <- ${escaped}\nFILE_CONTENT <- readLines(FILE_CONTENT_PATH, warn=FALSE, encoding="UTF-8")\nFILE_CONTENT <- paste(FILE_CONTENT, collapse="\\n")\n${code}`;
       case "elixir":
         return `file_content_path = ${escaped}\nfile_content = File.read!(file_content_path)\n${code}`;
     }
