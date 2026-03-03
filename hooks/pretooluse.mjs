@@ -198,7 +198,10 @@ if (tool === "Bash") {
   process.exit(0);
 }
 
-// ─── Read: nudge toward execute_file ───
+// ─── Read: intent-aware nudge ───
+// Edit requires file content in context, so Read is the right tool when
+// the goal is to modify the file.  For analysis or exploration of large
+// files, execute_file keeps raw content out of the context window.
 if (tool === "Read") {
   outputAndExit({
     hookSpecificOutput: {
