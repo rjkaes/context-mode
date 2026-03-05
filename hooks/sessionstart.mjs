@@ -327,7 +327,8 @@ try {
     const dbPath = getSessionDBPath();
     const db = new SessionDB({ dbPath });
     try { unlinkSync(getSessionEventsPath()); } catch { /* no stale file */ }
-    db.cleanupOldSessions();
+    // User didn't --continue, starting fresh — delete all previous sessions immediately
+    db.cleanupOldSessions(0);
 
     // Proactively capture CLAUDE.md files — Claude Code loads them as system
     // context at startup, invisible to PostToolUse hooks. We read them from
