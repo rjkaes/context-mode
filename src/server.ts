@@ -4,7 +4,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { existsSync, unlinkSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { z } from "zod";
 import { PolyglotExecutor } from "./executor.js";
@@ -1527,7 +1528,7 @@ server.registerTool(
     inputSchema: z.object({}),
   },
   async () => {
-    const pluginRoot = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+    const pluginRoot = dirname(dirname(fileURLToPath(import.meta.url)));
     const cmd = `node "${pluginRoot}/build/cli.js" doctor`;
 
     const text = [
@@ -1572,7 +1573,7 @@ server.registerTool(
     inputSchema: z.object({}),
   },
   async () => {
-    const pluginRoot = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+    const pluginRoot = dirname(dirname(fileURLToPath(import.meta.url)));
     const cmd = `node "${pluginRoot}/build/cli.js" upgrade`;
 
     const text = [

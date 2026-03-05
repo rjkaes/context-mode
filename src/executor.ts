@@ -362,7 +362,6 @@ export class PolyglotExecutor {
       const winVars = [
         "SYSTEMROOT", "SystemRoot", "COMSPEC", "PATHEXT",
         "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP",
-        "GOROOT", "GOPATH",
       ];
       for (const key of winVars) {
         if (process.env[key]) env[key] = process.env[key]!;
