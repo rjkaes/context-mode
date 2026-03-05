@@ -13,8 +13,8 @@ describe("OpenCodeAdapter", () => {
   // ── Capabilities ──────────────────────────────────────
 
   describe("capabilities", () => {
-    it("sessionStart is false", () => {
-      expect(adapter.capabilities.sessionStart).toBe(false);
+    it("sessionStart is true", () => {
+      expect(adapter.capabilities.sessionStart).toBe(true);
     });
 
     it("canInjectSessionContext is false", () => {
@@ -42,11 +42,11 @@ describe("OpenCodeAdapter", () => {
       expect(event.sessionId).toBe("oc-session-123");
     });
 
-    it("projectDir is undefined (uses ctx.directory)", () => {
+    it("projectDir falls back to cwd when no OPENCODE_PROJECT_DIR", () => {
       const event = adapter.parsePreToolUseInput({
         tool_name: "shell",
       });
-      expect(event.projectDir).toBeUndefined();
+      expect(event.projectDir).toBe(process.cwd());
     });
 
     it("extracts toolName from tool_name", () => {
@@ -128,10 +128,30 @@ describe("OpenCodeAdapter", () => {
   // ── parseSessionStartInput ────────────────────────────
 
   describe("parseSessionStartInput", () => {
-    it("throws because SessionStart is not supported", () => {
-      expect(() => adapter.parseSessionStartInput({})).toThrow(
-        /OpenCode does not support SessionStart/,
-      );
+    it("parses startup source by default", () => {
+      const event = adapter.parseSessionStartInput({});
+      expect(event.source).toBe("startup");
+      expect(event.projectDir).toBe(process.cwd());
+    });
+
+    it("parses compact source", () => {
+      const event = adapter.parseSessionStartInput({ source: "compact" });
+      expect(event.source).toBe("compact");
+    });
+
+    it("parses resume source", () => {
+      const event = adapter.parseSessionStartInput({ source: "resume" });
+      expect(event.source).toBe("resume");
+    });
+
+    it("parses clear source", () => {
+      const event = adapter.parseSessionStartInput({ source: "clear" });
+      expect(event.source).toBe("clear");
+    });
+
+    it("extracts sessionId from sessionID", () => {
+      const event = adapter.parseSessionStartInput({ sessionID: "oc-123" });
+      expect(event.sessionId).toBe("oc-123");
     });
   });
 
