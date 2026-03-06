@@ -1,4 +1,4 @@
-name: Bundle MCP Server
+name: Bundle MCP Server & CLI
 
 on:
   workflow_dispatch:
@@ -32,7 +32,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add server.bundle.mjs
+          git add server.bundle.mjs cli.bundle.mjs
           git diff --staged --quiet && echo "No changes" && exit 0
-          git commit -m "ci: update server.bundle.mjs"
+          git commit -m "ci: update server.bundle.mjs & cli.bundle.mjs"
           git push

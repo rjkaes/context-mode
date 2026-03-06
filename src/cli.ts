@@ -15,7 +15,7 @@
 import * as p from "@clack/prompts";
 import color from "picocolors";
 import { execSync } from "node:child_process";
-import { readFileSync, cpSync, accessSync, readdirSync, rmSync, closeSync, openSync, constants } from "node:fs";
+import { readFileSync, cpSync, accessSync, existsSync, readdirSync, rmSync, closeSync, openSync, constants } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { tmpdir, devNull } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -105,7 +105,11 @@ export function toUnixPath(p: string): string {
 function getPluginRoot(): string {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = dirname(__filename);
-  return resolve(__dirname, "..");
+  // build/cli.js → go up one level; cli.bundle.mjs at project root → stay here
+  if (__dirname.endsWith("/build") || __dirname.endsWith("\\build")) {
+    return resolve(__dirname, "..");
+  }
+  return __dirname;
 }
 
 function getLocalVersion(): string {
@@ -443,7 +447,7 @@ async function upgrade() {
 
     const items = [
       "build", "src", "hooks", "skills", ".claude-plugin",
-      "start.mjs", "server.bundle.mjs", "package.json", ".mcp.json",
+      "start.mjs", "server.bundle.mjs", "cli.bundle.mjs", "package.json", ".mcp.json",
     ];
     for (const item of items) {
       try {
@@ -525,13 +529,15 @@ async function upgrade() {
   // Step 5: Set hook script permissions — adapter-aware
   p.log.step("Setting hook script permissions...");
   const permSet = adapter.setHookPermissions(pluginRoot);
-  // Also ensure CLI binary is executable (tsc doesn't set +x)
-  const cliBin = resolve(pluginRoot, "build", "cli.js");
-  try {
-    accessSync(cliBin, constants.F_OK);
-    execSync(`chmod +x "${cliBin}"`, { stdio: "ignore" });
-    permSet.push(cliBin);
-  } catch { /* cli.js not found — skip */ }
+  // Also ensure CLI binaries are executable (tsc doesn't set +x)
+  for (const bin of ["build/cli.js", "cli.bundle.mjs"]) {
+    const binPath = resolve(pluginRoot, bin);
+    try {
+      accessSync(binPath, constants.F_OK);
+      execSync(`chmod +x "${binPath}"`, { stdio: "ignore" });
+      permSet.push(binPath);
+    } catch { /* not found — skip */ }
+  }
   if (permSet.length > 0) {
     p.log.success(color.green("Permissions set") + color.dim(` — ${permSet.length} hook script(s)`));
     changes.push(`Set ${permSet.length} hook scripts as executable`);
@@ -557,7 +563,10 @@ async function upgrade() {
   console.log();
 
   try {
-    execSync(`node "${resolve(pluginRoot, "build", "cli.js")}" doctor`, {
+    const cliBundlePath = resolve(pluginRoot, "cli.bundle.mjs");
+    const cliBuildPath = resolve(pluginRoot, "build", "cli.js");
+    const cliPath = existsSync(cliBundlePath) ? cliBundlePath : cliBuildPath;
+    execSync(`node "${cliPath}" doctor`, {
       stdio: "inherit",
       timeout: 30000,
       cwd: pluginRoot,

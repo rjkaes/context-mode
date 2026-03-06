@@ -6,3 +6,4 @@ packages/*/dist/
 /tmp/
 *.db
 # server.bundle.mjs is committed by CI — do NOT gitignore
+# cli.bundle.mjs is committed by CI — do NOT gitignore

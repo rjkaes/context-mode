@@ -16,7 +16,7 @@ Pull latest from GitHub and reinstall the plugin.
 1. Derive the **plugin root** from this skill's base directory (go up 2 levels — remove `/skills/ctx-upgrade`).
 2. Run with Bash:
    ```
-   node "<PLUGIN_ROOT>/build/cli.js" upgrade
+   CLI="<PLUGIN_ROOT>/cli.bundle.mjs"; [ ! -f "$CLI" ] && CLI="<PLUGIN_ROOT>/build/cli.js"; node "$CLI" upgrade
    ```
 3. **IMPORTANT**: After the Bash tool completes, re-display the key results as markdown text directly in the conversation so the user sees them without expanding the tool output. Format as:
    ```
