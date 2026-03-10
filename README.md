@@ -199,21 +199,13 @@ npm install -g context-mode
   "hooks": {
     "preToolUse": [
       {
-        "type": "command",
         "command": "context-mode hook cursor pretooluse",
         "matcher": "Shell|Read|Grep|WebFetch|Task|MCP:ctx_execute|MCP:ctx_execute_file|MCP:ctx_batch_execute"
       }
     ],
     "postToolUse": [
       {
-        "type": "command",
         "command": "context-mode hook cursor posttooluse"
-      }
-    ],
-    "sessionStart": [
-      {
-        "type": "command",
-        "command": "context-mode hook cursor sessionstart"
       }
     ]
   }
@@ -222,11 +214,11 @@ npm install -g context-mode
 
 Note: the `preToolUse` hook matcher is optional. If you don't provide it, the hook will fire on all tools.
 
-**Step 4 — Restart Cursor or open a new agent session.**
+**Step 4 — Restart Cursor or open a new agent session.** On first MCP server startup, routing instructions are auto-written to your project (same mechanism as Codex CLI).
 
-> **Native Cursor scope:** v1 ships `preToolUse`, `postToolUse`, and `sessionStart`. `preCompact` is intentionally not enabled until real Cursor fixtures confirm compatible compaction semantics.
+> **Native Cursor scope:** `preToolUse` and `postToolUse` are supported. `sessionStart` is documented by Cursor but currently rejected by their validator ([forum report](https://forum.cursor.com/t/unknown-hook-type-sessionstart/149566)), so routing instructions are delivered via MCP server startup instead.
 >
-> **Config precedence:** project `.cursor/hooks.json` overrides `~/.cursor/hooks.json`. Cursor may also load enterprise config at `/Library/Application Support/Cursor/hooks.json`; context-mode treats that layer as read-only informational.
+> **Config precedence:** project `.cursor/hooks.json` overrides `~/.cursor/hooks.json`.
 
 Full native hook config: [`configs/cursor/hooks.json`](configs/cursor/hooks.json)  
 Example MCP registration: [`configs/cursor/mcp.json`](configs/cursor/mcp.json)
@@ -364,10 +356,10 @@ Session continuity requires 4 hooks working together:
 | **PostToolUse** | Captures events after each tool call | Yes | Yes | Yes | Yes | Plugin | -- |
 | **UserPromptSubmit** | Captures user decisions and corrections | Yes | -- | -- | -- | -- | -- |
 | **PreCompact** | Builds snapshot before compaction | Yes | Yes | Yes | -- | Plugin | -- |
-| **SessionStart** | Restores state after compaction or resume | Yes | Yes | Yes | Yes | -- | -- |
-| | **Session completeness** | **Full** | **High** | **High** | **Medium** | **High** | **--** |
+| **SessionStart** | Restores state after compaction or resume | Yes | Yes | Yes | -- | -- | -- |
+| | **Session completeness** | **Full** | **High** | **High** | **Partial** | **High** | **--** |
 
-> **Note:** Full session continuity (capture + snapshot + restore) works on **Claude Code**, **Gemini CLI**, and **VS Code Copilot**, and **OpenCode**. **Cursor** v1 restores from persisted session events via `sessionStart`, but intentionally does not advertise `preCompact` until real native fixtures confirm compaction compatibility. **OpenCode** uses the `experimental.session.compacting` plugin hook for compaction recovery, but SessionStart is not yet available ([#14808](https://github.com/sst/opencode/issues/14808)), so startup/resume is not supported. Codex CLI has no hook support, so session tracking is not available.
+> **Note:** Full session continuity (capture + snapshot + restore) works on **Claude Code**, **Gemini CLI**, **VS Code Copilot**, and **OpenCode**. **Cursor** captures tool events via `preToolUse`/`postToolUse`, but `sessionStart` is currently rejected by Cursor's validator ([forum report](https://forum.cursor.com/t/unknown-hook-type-sessionstart/149566)), so session restore after compaction is not available yet. **OpenCode** uses the `experimental.session.compacting` plugin hook for compaction recovery, but SessionStart is not yet available ([#14808](https://github.com/sst/opencode/issues/14808)), so startup/resume is not supported. Codex CLI has no hook support, so session tracking is not available.
 
 <details>
 <summary><strong>What gets captured</strong></summary>
@@ -442,7 +434,7 @@ Detailed event data is also indexed into FTS5 for on-demand retrieval via `searc
 
 **VS Code Copilot** — High coverage. Same as Gemini CLI — PostToolUse, PreCompact, and SessionStart all fire. User decisions aren't captured but all tool-level events are.
 
-**Cursor** — Medium coverage. Native `preToolUse`, `postToolUse`, and `sessionStart` hooks are supported. Session restore works from the persisted event database, but `preCompact` is intentionally disabled in v1 until real Cursor fixtures prove compatible semantics.
+**Cursor** — Partial coverage. Native `preToolUse` and `postToolUse` hooks capture tool events. `sessionStart` is documented by Cursor but currently rejected by their validator, so session restore is not available. Routing instructions are delivered via MCP server startup instead.
 
 **OpenCode** — Partial. The TypeScript plugin captures PostToolUse events via `tool.execute.after`, but SessionStart is not yet available ([#14808](https://github.com/sst/opencode/issues/14808)). Events are stored but not automatically restored after compaction. The `AGENTS.md` routing instructions file compensates by re-teaching tool preferences at each session start.
 
@@ -457,7 +449,7 @@ Detailed event data is also indexed into FTS5 for on-demand retrieval via `searc
 | MCP Server | Yes | Yes | Yes | Yes | Yes | Yes |
 | PreToolUse Hook | Yes | Yes | Yes | Yes | Plugin | -- |
 | PostToolUse Hook | Yes | Yes | Yes | Yes | Plugin | -- |
-| SessionStart Hook | Yes | Yes | Yes | Yes | -- | -- |
+| SessionStart Hook | Yes | Yes | Yes | -- | -- | -- |
 | PreCompact Hook | Yes | Yes | Yes | -- | Plugin | -- |
 | Can Modify Args | Yes | Yes | Yes | Yes | Plugin | -- |
 | Can Block Tools | Yes | Yes | Yes | Yes | Plugin | -- |

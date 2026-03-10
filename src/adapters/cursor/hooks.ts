@@ -41,7 +41,6 @@ export const PRE_TOOL_USE_MATCHER_PATTERN = PRE_TOOL_USE_MATCHERS.join("|");
 /** Required hooks for native Cursor support. */
 export const REQUIRED_HOOKS: HookType[] = [
   HOOK_TYPES.PRE_TOOL_USE,
-  HOOK_TYPES.SESSION_START,
 ];
 
 /** Optional hooks that improve behavior but aren't strictly required. */

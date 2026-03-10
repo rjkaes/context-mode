@@ -11,7 +11,7 @@
  *   - Gemini CLI:     GEMINI_PROJECT_DIR (hooks), GEMINI_CLI (MCP) | ~/.gemini/
  *   - OpenCode:       OPENCODE, OPENCODE_PID | ~/.config/opencode/
  *   - Codex CLI:      CODEX_CI, CODEX_THREAD_ID | ~/.codex/
- *   - Cursor:         CURSOR_CWD, CURSOR_SESSION_ID, CURSOR_TRACE_ID | ~/.cursor/
+ *   - Cursor:         CURSOR_TRACE_ID (MCP), CURSOR_CLI (terminal) | ~/.cursor/
  *   - VS Code Copilot: VSCODE_PID, VSCODE_CWD | ~/.vscode/
  */
 
@@ -59,15 +59,11 @@ export function detectPlatform(): DetectionSignal {
     };
   }
 
-  if (
-    process.env.CURSOR_CWD
-    || process.env.CURSOR_SESSION_ID
-    || process.env.CURSOR_TRACE_ID
-  ) {
+  if (process.env.CURSOR_TRACE_ID || process.env.CURSOR_CLI) {
     return {
       platform: "cursor",
       confidence: "high",
-      reason: "CURSOR_CWD, CURSOR_SESSION_ID, or CURSOR_TRACE_ID env var set",
+      reason: "CURSOR_TRACE_ID or CURSOR_CLI env var set",
     };
   }
 

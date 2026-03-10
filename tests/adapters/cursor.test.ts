@@ -20,7 +20,7 @@ describe("CursorAdapter", () => {
     it("enables native Cursor v1 hooks without preCompact", () => {
       expect(adapter.capabilities.preToolUse).toBe(true);
       expect(adapter.capabilities.postToolUse).toBe(true);
-      expect(adapter.capabilities.sessionStart).toBe(true);
+      expect(adapter.capabilities.sessionStart).toBe(false);
       expect(adapter.capabilities.preCompact).toBe(false);
       expect(adapter.capabilities.canModifyArgs).toBe(true);
       expect(adapter.capabilities.canModifyOutput).toBe(false);
@@ -233,7 +233,7 @@ describe("CursorAdapter", () => {
       expect(results[0]?.check).toBe("Native hook config");
       expect(results[0]?.status).toBe("pass");
       expect(results.find((result) => result.check === "preToolUse")?.status).toBe("pass");
-      expect(results.find((result) => result.check === "sessionStart")?.status).toBe("pass");
+      // sessionStart is not validated — Cursor rejects it currently
       expect(results.find((result) => result.check === "postToolUse")?.status).toBe("warn");
       expect(results.find((result) => result.check === "Claude compatibility")?.status).toBe("warn");
     });

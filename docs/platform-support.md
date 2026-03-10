@@ -38,14 +38,14 @@ This puts the `context-mode` binary in PATH, which is required for:
 | **PreToolUse equivalent** | `PreToolUse` | `BeforeTool` | `PreToolUse` | `preToolUse` | `tool.execute.before` | -- |
 | **PostToolUse equivalent** | `PostToolUse` | `AfterTool` | `PostToolUse` | `postToolUse` | `tool.execute.after` | -- |
 | **PreCompact equivalent** | `PreCompact` | `PreCompress` | `PreCompact` | -- | `experimental.session.compacting` | -- |
-| **SessionStart** | `SessionStart` | `SessionStart` | `SessionStart` | `sessionStart` | -- | -- |
+| **SessionStart** | `SessionStart` | `SessionStart` | `SessionStart` | -- (buggy in Cursor) | -- | -- |
 | **Can modify args** | Yes | Yes | Yes | Yes | Yes | -- |
 | **Can modify output** | Yes | Yes | Yes | No | Yes (caveat) | -- |
 | **Can inject session context** | Yes | Yes | Yes | Yes | -- | -- |
 | **Can block tools** | Yes | Yes | Yes | Yes | Yes (throw) | -- |
 | **Config location** | `~/.claude/settings.json` | `~/.gemini/settings.json` | `.github/hooks/*.json` | `.cursor/hooks.json` or `~/.cursor/hooks.json` | `opencode.json` | `~/.codex/config.toml` |
 | **Session ID field** | `session_id` | `session_id` | `sessionId` (camelCase) | `conversation_id` | `sessionID` (camelCase) | N/A |
-| **Project dir env** | `CLAUDE_PROJECT_DIR` | `GEMINI_PROJECT_DIR` | `CLAUDE_PROJECT_DIR` | `CURSOR_CWD` | `ctx.directory` (plugin init) | N/A |
+| **Project dir env** | `CLAUDE_PROJECT_DIR` | `GEMINI_PROJECT_DIR` | `CLAUDE_PROJECT_DIR` | stdin `workspace_roots` | `ctx.directory` (plugin init) | N/A |
 | **MCP tool naming** | `mcp__server__tool` | `mcp__server__tool` | `f1e_` prefix | `MCP:<tool>` in hook payloads | `mcp__server__tool` | `mcp__server__tool` |
 | **Hook command format** | `context-mode hook claude-code <event>` | `context-mode hook gemini-cli <event>` | `context-mode hook vscode-copilot <event>` | `context-mode hook cursor <event>` | TS plugin (no command) | N/A |
 | **Hook registration** | settings.json hooks object | settings.json hooks object | `.github/hooks/*.json` | `hooks.json` native hook arrays | opencode.json plugin array | N/A |
@@ -277,26 +277,29 @@ Cursor uses native lower-camel hook names and flat hook entries in `.cursor/hook
 **Hook Names:**
 - `preToolUse` -- fires before a tool is executed
 - `postToolUse` -- fires after a tool completes
-- `sessionStart` -- fires on startup, resume, and compact
+- `sessionStart` -- documented but currently rejected by Cursor's validator ([forum report](https://forum.cursor.com/t/unknown-hook-type-sessionstart/149566))
 
 **Blocking:** `{ "permission": "deny", "user_message": "..." }`
 
-**Arg Modification:** `{ "updated_input": { ... } }`
+**Arg Modification:** not natively supported (Cursor does not have `updated_input`)
 
 **Output Modification:** not supported in v1
 
 **Session Context Injection:** `{ "additional_context": "..." }`
 
 **Session ID Extraction Priority:**
-1. `conversation_id`
-2. `CURSOR_SESSION_ID` environment variable
-3. `CURSOR_TRACE_ID` environment variable
-4. Parent process ID fallback
+1. `conversation_id` (stdin JSON)
+2. `CURSOR_TRACE_ID` environment variable
+3. Parent process ID fallback
+
+**Platform Detection Env Vars:**
+- `CURSOR_TRACE_ID` (MCP server context)
+- `CURSOR_CLI` (integrated terminal context)
+- `~/.cursor/` directory fallback (medium confidence)
 
 **Configuration:**
 - Project: `.cursor/hooks.json`
 - User: `~/.cursor/hooks.json`
-- Enterprise: `/Library/Application Support/Cursor/hooks.json` (read-only informational layer)
 - MCP config: `.cursor/mcp.json` or `~/.cursor/mcp.json`
 
 **Hook Commands:**

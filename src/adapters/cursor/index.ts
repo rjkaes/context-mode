@@ -75,7 +75,7 @@ export class CursorAdapter implements HookAdapter {
     preToolUse: true,
     postToolUse: true,
     preCompact: false,
-    sessionStart: true,
+    sessionStart: false,
     canModifyArgs: true,
     canModifyOutput: false,
     canInjectSessionContext: true,

@@ -103,22 +103,22 @@ describe("detectPlatform", () => {
 
   // ── Cursor ─────────────────────────────────────────────
 
-  it("returns cursor when CURSOR_CWD is set", () => {
-    process.env.CURSOR_CWD = "/some/dir";
+  it("returns cursor when CURSOR_TRACE_ID is set", () => {
+    process.env.CURSOR_TRACE_ID = "trace-abc-123";
     const signal = detectPlatform();
     expect(signal.platform).toBe("cursor");
     expect(signal.confidence).toBe("high");
   });
 
-  it("returns cursor when CURSOR_SESSION_ID is set", () => {
-    process.env.CURSOR_SESSION_ID = "cursor-sess-123";
+  it("returns cursor when CURSOR_CLI is set", () => {
+    process.env.CURSOR_CLI = "1";
     const signal = detectPlatform();
     expect(signal.platform).toBe("cursor");
     expect(signal.confidence).toBe("high");
   });
 
   it("prefers cursor over vscode-copilot when both Cursor and VS Code env vars are set", () => {
-    process.env.CURSOR_CWD = "/cursor/project";
+    process.env.CURSOR_TRACE_ID = "trace-abc-123";
     process.env.VSCODE_PID = "12345";
     const signal = detectPlatform();
     expect(signal.platform).toBe("cursor");
